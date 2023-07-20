@@ -1,0 +1,154 @@
+name: Ubuntu Workflow
+on:
+  push:
+    branches:
+      - main
+      - feature/workflow
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Install or update tzdata if not present
+      run: |
+        if ! dpkg -l | grep -q tzdata; then
+          sudo apt-get update
+        fi
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata dpkg-dev debhelper rpm ruby ruby-dev
+        sudo gem install fpm
+
+    - name: Copy zoneinfo files
+      run: |
+        dpkg-query -L tzdata | grep ^/usr/share/zoneinfo | while read file; do
+          if [ -f "$file" ]; then
+            dest="package/usr/share/manticore/${file#/usr/share/}"
+            mkdir -p $(dirname $dest)
+            cp -Rn "$file" "$dest"
+          fi
+        done
+      shell: bash
+
+
+    - id: vars
+      run: |
+        version=0.9.9
+        date=$(date +%y%m%d)
+        commit=${GITHUB_SHA:0:7}
+        echo "rpm_version=${version}_${date}.${commit}" >> $GITHUB_OUTPUT
+        echo "deb_version=${version}-${date}-${commit}" >> $GITHUB_OUTPUT
+        echo "win_version=${version}-${date}-${commit}" >> $GITHUB_OUTPUT
+
+    - name: Build RPM package
+      run: |
+        fpm -s dir -t rpm -n manticore-tzdata -v ${{ steps.vars.outputs.rpm_version }} -a noarch --prefix=/usr/share/manticore/tzdata -C package/usr/share/manticore/zoneinfo .
+
+    - name: Build DEB package
+      run: |
+        fpm -s dir -t deb -n manticore-tzdata -v ${{ steps.vars.outputs.deb_version }} -a all --prefix /usr/share/manticore/tzdata -C package/usr/share/manticore/zoneinfo .
+
+    - name: Build WIN package
+      run: |
+        cd package
+        mv usr/share/manticore/zoneinfo usr/share/manticore/tzdata
+        zip -r "../manticore-tzdata-${{ steps.vars.outputs.win_version }}-x64.zip" usr/share/manticore/tzdata
+        cd ..
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: artifact-deb
+        path: |
+          ./*_all.deb
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: artifact-rpm
+        path: |
+          ./*.noarch.rpm
+          !./*-debuginfo-*.rpm
+
+    - uses: actions/upload-artifact@v3
+      with:
+        name: artifact
+        path: |
+          ./*.zip
+
+  deploy:
+    needs:
+      - build
+    runs-on: self-hosted
+    strategy:
+      matrix:
+        include:
+          - artifact: artifact-deb
+            ext: deb
+            script: upload_repo_deb
+            mask: ""
+            delimiter: "-"
+            distro: buster
+          - artifact: artifact-deb
+            ext: deb
+            script: upload_repo_deb
+            mask: ""
+            delimiter: "-"
+            distro: bionic
+          - artifact: artifact-deb
+            ext: deb
+            script: upload_repo_deb
+            mask: ""
+            delimiter: "-"
+            distro: focal
+          - artifact: artifact-deb
+            ext: deb
+            script: upload_repo_deb
+            mask: ""
+            delimiter: "-"
+            distro: jammy
+          - artifact: artifact-deb
+            ext: deb
+            script: upload_repo_deb
+            mask: ""
+            delimiter: "-"
+            distro: bullseye
+          - artifact: artifact-deb
+            ext: deb
+            script: upload_repo_deb
+            mask: ""
+            delimiter: "-"
+            distro: bookworm
+          - artifact: artifact-rpm
+            ext: rpm
+            script: upload_repo_rpm
+            mask: "*.noarch.rpm"
+            delimiter: "_"
+            distro: 7
+          - artifact: artifact-rpm
+            ext: rpm
+            script: upload_repo_rpm
+            mask: "*.noarch.rpm"
+            delimiter: "_"
+            distro: 8
+          - artifact: artifact-rpm
+            ext: rpm
+            script: upload_repo_rpm
+            mask: "*.noarch.rpm"
+            delimiter: "_"
+            distro: 9
+          - artifact: artifact
+            ext: "{tar.gz,zip}"
+            script: upload_repo_arc
+            delimiter: "-"
+            distro: ""
+    steps:
+      - uses: actions/checkout@v3
+      - run: mkdir build
+      - uses: actions/download-artifact@v3
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./build
+
+      - name: Deploy package
+        run: |
+          curl -sSL https://raw.githubusercontent.com/manticoresoftware/repo_scripts/main/${{ matrix.script }} > ${{ matrix.script }}
+          chmod +x ${{ matrix.script }}
+          DISTRO=${{ matrix.distro }} DIGIT_DELIMITER2="${{ matrix.delimiter }}" FILE_MASK="${{ matrix.mask }}" ./${{ matrix.script }}
+        shell: bash
