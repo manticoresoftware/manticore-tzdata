@@ -53,20 +53,20 @@ jobs:
         zip -r "../manticore-tzdata-${{ steps.vars.outputs.win_version }}-x64.zip" usr/share/manticore/tzdata
         cd ..
 
-    - uses: actions/upload-artifact@v3
+    - uses: manticoresoftware/upload_artifact_with_retries@v3
       with:
         name: artifact-deb
         path: |
           ./*_all.deb
 
-    - uses: actions/upload-artifact@v3
+    - uses: manticoresoftware/upload_artifact_with_retries@v3
       with:
         name: artifact-rpm
         path: |
           ./*.noarch.rpm
           !./*-debuginfo-*.rpm
 
-    - uses: actions/upload-artifact@v3
+    - uses: manticoresoftware/upload_artifact_with_retries@v3
       with:
         name: artifact
         path: |
