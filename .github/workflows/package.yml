@@ -138,6 +138,7 @@ jobs:
             script: upload_repo_arc
             delimiter: "-"
             distro: ""
+    name: ${{ matrix.distro }}
     steps:
       - uses: actions/checkout@v3
       - run: mkdir build
