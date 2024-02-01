@@ -56,21 +56,18 @@ jobs:
     - uses: manticoresoftware/upload_artifact_with_retries@v3
       with:
         name: artifact-deb
-        path: |
-          ./*_all.deb
+        path: "./*_all.deb"
 
     - uses: manticoresoftware/upload_artifact_with_retries@v3
       with:
         name: artifact-rpm
-        path: |
-          ./*.noarch.rpm
-          !./*-debuginfo-*.rpm
+        path: "./*.noarch.rpm"
+#          !./*-debuginfo-*.rpm
 
     - uses: manticoresoftware/upload_artifact_with_retries@v3
       with:
         name: artifact
-        path: |
-          ./*.zip
+        path: "./*.zip"
 
   publish_debian_ubuntu:
     needs: build
