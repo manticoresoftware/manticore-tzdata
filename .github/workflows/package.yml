@@ -1,0 +1,122 @@
+name: Ubuntu Workflow
+on:
+  push:
+    branches:
+      - main
+      - feature/workflow
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+    - name: Install or update tzdata if not present
+      run: |
+        if ! dpkg -l | grep -q tzdata; then
+          sudo apt-get update
+        fi
+        sudo DEBIAN_FRONTEND=noninteractive apt-get install -y tzdata dpkg-dev debhelper rpm ruby ruby-dev
+        sudo gem install fpm
+
+    - name: Copy zoneinfo files
+      run: |
+        dpkg-query -L tzdata | grep ^/usr/share/zoneinfo | while read file; do
+          if [ -f "$file" ]; then
+            dest="package/usr/share/manticore/${file#/usr/share/}"
+            mkdir -p $(dirname $dest)
+            cp -Rn "$file" "$dest"
+          fi
+        done
+      shell: bash
+
+
+    - id: vars
+      run: |
+        version=0.9.9
+        date=$(date +%y%m%d)
+        commit=${GITHUB_SHA:0:7}
+        echo "rpm_version=${version}_${date}.${commit}" >> $GITHUB_OUTPUT
+        echo "deb_version=${version}-${date}-${commit}" >> $GITHUB_OUTPUT
+        echo "win_version=${version}-${date}-${commit}" >> $GITHUB_OUTPUT
+
+    - name: Build RPM package
+      run: |
+        fpm -s dir -t rpm -n manticore-tzdata -v ${{ steps.vars.outputs.rpm_version }} -a noarch --prefix=/usr/share/manticore/tzdata -C package/usr/share/manticore/zoneinfo .
+
+    - name: Build DEB package
+      run: |
+        fpm -s dir -t deb -n manticore-tzdata -v ${{ steps.vars.outputs.deb_version }} -a all --prefix /usr/share/manticore/tzdata -C package/usr/share/manticore/zoneinfo .
+
+    - name: Build WIN package
+      run: |
+        cd package
+        mv usr/share/manticore/zoneinfo usr/share/manticore/tzdata
+        zip -r "../manticore-tzdata-${{ steps.vars.outputs.win_version }}-x64.zip" usr/share/manticore/tzdata
+        cd ..
+
+    - uses: manticoresoftware/upload_artifact_with_retries@v3
+      with:
+        name: artifact-deb
+        path: "./*_all.deb"
+
+    - uses: manticoresoftware/upload_artifact_with_retries@v3
+      with:
+        name: artifact-rpm
+        path: "./*.noarch.rpm"
+#          !./*-debuginfo-*.rpm
+
+    - uses: manticoresoftware/upload_artifact_with_retries@v3
+      with:
+        name: artifact
+        path: "./*.zip"
+
+  publish_debian_ubuntu:
+    needs: build
+    strategy:
+      fail-fast: true
+      matrix:
+        DISTR: [bionic, focal, jammy, buster, bullseye, bookworm]
+        arch: [x86_64, aarch64]
+    runs-on: ubuntu-22.04
+    name: ${{ matrix.DISTR }} ${{ matrix.arch }} publishing
+    steps:
+      - uses: manticoresoftware/publish_to_repo@main
+        with:
+          ssh_key: ${{ secrets.REPO_SSH_KEY }}
+          distr: ${{ matrix.DISTR }}
+          arch: ${{ matrix.arch }}
+          artifact: artifact-deb
+          type: deb
+          delimiter: "-"
+
+  publish_rhel:
+    needs: build
+    strategy:
+      fail-fast: true
+      matrix:
+        DISTR: [7, 8, 9]
+        arch: [x86_64, aarch64]
+    runs-on: ubuntu-22.04
+    name: RHEL ${{ matrix.DISTR }} ${{ matrix.arch }} publishing
+    steps:
+      - uses: manticoresoftware/publish_to_repo@main
+        with:
+          ssh_key: ${{ secrets.REPO_SSH_KEY }}
+          distr: ${{ matrix.DISTR }}
+          arch: ${{ matrix.arch }}
+          artifact: artifact-rpm
+          type: rpm
+          delimiter: "_"
+
+  publish_windows:
+    name: Publishing Windows packages to repo.manticoresearch.com
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: manticoresoftware/publish_to_repo@main
+        with:
+          ssh_key: ${{ secrets.REPO_SSH_KEY }}
+          distr: windows
+          arch: x64
+          artifact: artifact
+          type: arc
+          delimiter: "-"
