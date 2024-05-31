@@ -3,12 +3,15 @@ on:
   push:
     branches:
       - main
-      - feature/workflow
-      
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    outputs:
+      app_version: ${{ steps.vars.outputs.app_version }}
+      app_date: ${{ steps.vars.outputs.app_date }}
+      app_commit: ${{ steps.vars.outputs.app_commit }}
+
     steps:
     - name: Install or update tzdata if not present
       run: |
@@ -35,6 +38,9 @@ jobs:
         version=1.0.1
         date=$(date +%y%m%d)
         commit=${GITHUB_SHA:0:7}
+        echo "app_version=$version" >> $GITHUB_OUTPUT
+        echo "app_date=$date" >> $GITHUB_OUTPUT
+        echo "app_commit=$commit" >> $GITHUB_OUTPUT
         echo "rpm_version=${version}_${date}.${commit}" >> $GITHUB_OUTPUT
         echo "deb_version=${version}-${date}-${commit}" >> $GITHUB_OUTPUT
         echo "win_version=${version}-${date}-${commit}" >> $GITHUB_OUTPUT
@@ -121,3 +127,15 @@ jobs:
           artifact: artifact
           type: arc
           delimiter: "-"
+
+  update-manticoresearch-deps:
+    needs:
+      - build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Update deps
+        uses: manticoresoftware/manticoresearch/actions/update-deps@master
+        with:
+          name: tzdata
+          version: "${{ needs.build.outputs.app_version }} ${{ needs.build.outputs.app_date }} ${{ needs.build.outputs.app_commit }}"
+          token: ${{ secrets.PR_TOKEN }}
