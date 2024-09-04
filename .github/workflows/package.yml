@@ -139,3 +139,4 @@ jobs:
           name: tzdata
           version: "${{ needs.build.outputs.app_version }} ${{ needs.build.outputs.app_date }} ${{ needs.build.outputs.app_commit }}"
           token: ${{ secrets.PR_TOKEN }}
+
