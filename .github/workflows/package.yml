@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'release-*'
 
 jobs:
   build:
@@ -85,6 +87,8 @@ jobs:
         arch: [x86_64, aarch64]
     runs-on: ubuntu-22.04
     name: ${{ matrix.DISTR }} ${{ matrix.arch }} publishing
+    env:
+      target: ${{ startsWith(github.ref, 'refs/tags/release-') && 'release' || 'dev' }}
     steps:
       - uses: manticoresoftware/publish_to_repo@main
         with:
@@ -104,6 +108,8 @@ jobs:
         arch: [x86_64, aarch64]
     runs-on: ubuntu-22.04
     name: RHEL ${{ matrix.DISTR }} ${{ matrix.arch }} publishing
+    env:
+      target: ${{ startsWith(github.ref, 'refs/tags/release-') && 'release' || 'dev' }}
     steps:
       - uses: manticoresoftware/publish_to_repo@main
         with:
@@ -118,6 +124,8 @@ jobs:
     name: Publishing Windows packages to repo.manticoresearch.com
     needs: build
     runs-on: ubuntu-22.04
+    env:
+      target: ${{ startsWith(github.ref, 'refs/tags/release-') && 'release' || 'dev' }}
     steps:
       - uses: manticoresoftware/publish_to_repo@main
         with:
