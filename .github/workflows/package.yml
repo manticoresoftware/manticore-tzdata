@@ -98,6 +98,7 @@ jobs:
           artifact: artifact-deb
           type: deb
           delimiter: "-"
+          target: ${{ env.target }}
 
   publish_rhel:
     needs: build
@@ -119,6 +120,7 @@ jobs:
           artifact: artifact-rpm
           type: rpm
           delimiter: "_"
+          target: ${{ env.target }}
 
   publish_windows:
     name: Publishing Windows packages to repo.manticoresearch.com
@@ -135,6 +137,7 @@ jobs:
           artifact: artifact
           type: arc
           delimiter: "-"
+          target: ${{ env.target }}
 
   update-manticoresearch-deps:
     needs:
